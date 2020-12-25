@@ -2,7 +2,9 @@ package main
 
 import (
 	"flag"
+	"io"
 	"io/ioutil"
+	"fmt"
 	"log"
 	"os"
 	"os/exec"
@@ -14,6 +16,7 @@ import (
 
 type Context struct {
 	InFolder       string
+	BakFolder      string
 	OutFolder      string
 	OCRMyPDFBinary string
 	Parameter      string
@@ -28,6 +31,7 @@ func main() {
 	}
 	context := &Context{
 		os.Getenv("OCRMYPDF_IN"),
+		os.Getenv("OCRMYPDF_BAK"),
 		os.Getenv("OCRMYPDF_OUT"),
 		os.Getenv("OCRMYPDF_BINARY"),
 		os.Getenv("OCRMYPDF_PARAMETER"),
@@ -35,6 +39,7 @@ func main() {
 		os.Getenv("WATCHDOG_EXTENSIONS"),
 	}
 	flag.StringVar(&context.InFolder, "in", context.InFolder, "input folder")
+	flag.StringVar(&context.BakFolder, "bak", context.BakFolder, "backup folder")
 	flag.StringVar(&context.OutFolder, "out", context.OutFolder, "output folder")
 	flag.StringVar(&context.OCRMyPDFBinary, "ocrmypdf", context.OCRMyPDFBinary, "ocrmydpf binary to use")
 	flag.IntVar(&context.Frequency, "frequency", frequency, "frequency in seconds")
@@ -55,6 +60,7 @@ func main() {
 	}
 	log.Println("Watchdog started with:")
 	log.Println("in = " + context.InFolder)
+	log.Println("bak = " + context.BakFolder)
 	log.Println("out = " + context.OutFolder)
 	log.Printf("Frequency = %d seconds\n", context.Frequency)
 	log.Println("Extensions to look for: " + context.Extensions)
@@ -96,6 +102,27 @@ func (c *Context) processDocument(path string) {
 	filename := filepath.Base(path)
 	extension := filepath.Ext(filename)
 	filename = filename[0 : len(filename)-len(extension)]
+	// copy file to backup folder
+	baktarget := c.BakFolder
+	if !strings.HasSuffix(baktarget, "/") {
+		baktarget = baktarget + "/"
+	}
+	targetWithExt := baktarget + filename + extension
+	
+	srcFile, err := os.Open(path)
+    check(err)
+    defer srcFile.Close()
+
+    destFile, err := os.Create(targetWithExt) // creates if file doesn't exist
+    check(err)
+    defer destFile.Close()
+
+    _, err = io.Copy(destFile, srcFile) // check first var for number of bytes copied
+    check(err)
+
+    err = destFile.Sync()
+    check(err)
+
 	// try to rename file
 	tmpFile, err := ioutil.TempFile(directory, filename+".*."+extension)
 	if err != nil {
@@ -156,4 +183,11 @@ func fileExists(filename string) bool {
         return false
     }
     return !info.IsDir()
+}
+
+func check(err error) {
+    if err != nil {
+        fmt.Println("Error : %s", err.Error())
+        os.Exit(1)
+    }
 }
