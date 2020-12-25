@@ -10,7 +10,7 @@ The docker-compose creates a container from the image. The first time it has to 
 
     docker-compose up --build
  
- There are 2 volumes: <b>/in</b> and <b>/out</b>
+ There are 3 volumes: <b>/in</b>, <b>/bak</b> and <b>/out</b>
  The docker-compose.yml shows how to use them.
  
  ## Environment
@@ -18,6 +18,7 @@ The docker-compose creates a container from the image. The first time it has to 
 The watchdog looks for the following environment variables:
  
 * OCRMYPDF_IN
+* OCRMYPDF_BAK
 * OCRMYPDF_OUT
 * OCRMYPDF_BINARY
 * OCRMYPDF_PARAMETER
@@ -29,6 +30,7 @@ The watchdog looks for the following environment variables:
 The watchdog accepts the following parameters:
 
 * --in <in-path>
+* --bak <backup-path>
 * --out <out-path>
 * --frequency <in seconds)
 * --ocrmypdf <path and name of the executable>
