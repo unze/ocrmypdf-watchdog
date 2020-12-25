@@ -3,16 +3,19 @@ services:
   ocrmypdf-watchdog:
     container_name: OCRmyPDF
     network_mode: none
-    # image: darthbermel/ocrmypdf-watchdog:latest
     build: '.'
+    image: unze/ocrmypdf-watchdog:latest
     restart: always
     environment:
       OCRMYPDF_IN: /in
+      OCRMYPDF_BAK: /bak
       OCRMYPDF_OUT: /out
-      WATCHDOG_FREQUENCY: 5
+      WATCHDOG_FREQUENCY: 60
       WATCHDOG_EXTENSIONS: pdf,jpg,jpeg,tif,tiff,png,gif
       OCRMYPDF_BINARY: ocrmypdf
-      OCRMYPDF_PARAMETER: -l eng+fra+deu --rotate-pages --deskew --jobs 4 --output-type pdfa
+      OCRMYPDF_PARAMETER: -l deu+eng+fra --rotate-pages --deskew --clean --optimize 3 --jobs 4
     volumes:
-    - /home/bernmic/ocrmypdf/in:/in
-    - /home/bernmic/ocrmypdf/out:/out
+    - /home/ocrmypdf/input:/in
+    - /home/ocrmypdf/backup:/bak
+    - /home/ocrmypdf/output:/out
+    
