@@ -32,5 +32,5 @@ The watchdog accepts the following parameters:
 * --in <in-path>
 * --bak <backup-path>
 * --out <out-path>
-* --frequency <in seconds)
+* --frequency <in seconds>
 * --ocrmypdf <path and name of the executable>
