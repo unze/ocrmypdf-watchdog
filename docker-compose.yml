@@ -1,9 +1,8 @@
 version: '3'
 services:
   ocrmypdf-watchdog:
-    container_name: OCRmyPDF
+    container_name: ocrmypdf-watchdog
     network_mode: none
-    build: '.'
     image: unze/ocrmypdf-watchdog:latest
     restart: always
     environment:
