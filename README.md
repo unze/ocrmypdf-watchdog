@@ -8,7 +8,7 @@ The Dockerfile creates an image based on the jbarlow83/ocrmypdf image and adds t
 
 The docker-compose creates a container from the image. The first time it has to be started with the --build flag to build the image:
 
-    docker-compose up --build
+    docker-compose up -d --build
  
  There are 3 volumes: <b>/in</b>, <b>/bak</b> and <b>/out</b>
  The docker-compose.yml shows how to use them.
