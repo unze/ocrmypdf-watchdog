@@ -7,6 +7,5 @@ RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -ldflags '-extldflag
 FROM jbarlow83/ocrmypdf:v11.5.0
 COPY --from=builder /go/bin/main /app/
 WORKDIR /app
-VOLUME /in /out
+VOLUME /in /bak /out
 ENTRYPOINT ["/app/main"]
-# ENTRYPOINT ["sh", "-c", "ls -l /app"]
