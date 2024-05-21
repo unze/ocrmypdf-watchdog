@@ -5,7 +5,7 @@ WORKDIR $GOPATH/src/ocrmypdf-watchdog/
 ENV GO111MODULE=on
 RUN go mod init
 RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -ldflags '-extldflags "-static"' -o /go/bin/main .
-FROM jbarlow83/ocrmypdf-alpine:v16.3.0
+FROM jbarlow83/ocrmypdf-alpine:v16.3.1
 COPY --from=builder /go/bin/main /app/
 WORKDIR /app
 VOLUME /in /bak /out
