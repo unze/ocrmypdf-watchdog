@@ -32,3 +32,23 @@ The watchdog accepts the following parameters:
 * --out <out-path>
 * --frequency <in seconds>
 * --ocrmypdf <path and name of the executable>
+
+## Example compose.yml
+    services:
+      ocrmypdf-watchdog:
+        container_name: ocrmypdf-watchdog
+        environment:
+          OCRMYPDF_BAK: /bak
+          OCRMYPDF_BINARY: ocrmypdf
+          OCRMYPDF_IN: /in
+          OCRMYPDF_OUT: /out
+          OCRMYPDF_PARAMETER: '-l deu+eng+fra --rotate-pages --deskew --clean --optimize 3 --jobs 4'
+          WATCHDOG_EXTENSIONS: pdf,jpg,jpeg,tif,tiff,png,gif
+          WATCHDOG_FREQUENCY: 60
+        image: unze/ocrmypdf-watchdog:latest
+        network_mode: none
+        restart: always
+        volumes:
+          - /host/path/input:/in
+          - /host/path/backup:/bak
+          - /host/path/output:/out
