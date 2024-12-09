@@ -1,20 +1,18 @@
-version: '3'
 services:
   ocrmypdf-watchdog:
     container_name: ocrmypdf-watchdog
-    network_mode: none
-    image: unze/ocrmypdf-watchdog:latest
-    restart: always
     environment:
-      OCRMYPDF_IN: /in
       OCRMYPDF_BAK: /bak
-      OCRMYPDF_OUT: /out
-      WATCHDOG_FREQUENCY: 60
-      WATCHDOG_EXTENSIONS: pdf,jpg,jpeg,tif,tiff,png,gif
       OCRMYPDF_BINARY: ocrmypdf
-      OCRMYPDF_PARAMETER: -l deu+eng+fra --rotate-pages --deskew --clean --optimize 3 --jobs 4
+      OCRMYPDF_IN: /in
+      OCRMYPDF_OUT: /out
+      OCRMYPDF_PARAMETER: '-l deu+eng+fra --rotate-pages --deskew --clean --optimize 3 --jobs 4'
+      WATCHDOG_EXTENSIONS: pdf,jpg,jpeg,tif,tiff,png,gif
+      WATCHDOG_FREQUENCY: 60
+    image: unze/ocrmypdf-watchdog:latest
+    network_mode: none
+    restart: always
     volumes:
-    - /home/ocrmypdf/input:/in
-    - /home/ocrmypdf/backup:/bak
-    - /home/ocrmypdf/output:/out
-    
+      - /host/path/input:/in
+      - /host/path/backup:/bak
+      - /host/path/output:/out
