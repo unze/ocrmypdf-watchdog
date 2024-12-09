@@ -30,6 +30,7 @@ The watchdog accepts the following parameters:
 * --in <in-path>
 * --bak <backup-path>
 * --out <out-path>
+<<<<<<< HEAD
 * --frequency <in seconds>
 * --ocrmypdf <path and name of the executable>
 
@@ -52,3 +53,11 @@ The watchdog accepts the following parameters:
           - /host/path/input:/in
           - /host/path/backup:/bak
           - /host/path/output:/out
+=======
+* --frequency <in seconds)
+* --ocrmypdf <path and name of the executable>
+
+## Multi architecture build
+
+docker buildx build -t "${DOCKER_USER}/ocrmypdf-watchdog:latest" --platform linux/amd64,linux/arm64 --push .
+>>>>>>> 0e685386b2b13146f9ea1a9e57da8924ac994642
