@@ -2,9 +2,9 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"io"
 	"io/ioutil"
-	"fmt"
 	"log"
 	"os"
 	"os/exec"
@@ -97,11 +97,20 @@ func (c *Context) watchdog() {
 
 func (c *Context) processDocument(path string) {
 	log.Println("Processing file " + path)
+
+	for i := 0; i < 10; i++ {
+		if isFileReady(path) {
+			break
+		}
+		time.Sleep(1 * time.Second)
+	}
+
 	// first get the parts of the path: dir+filename+ext
 	directory := filepath.Dir(path)
 	filename := filepath.Base(path)
 	extension := filepath.Ext(filename)
 	filename = filename[0 : len(filename)-len(extension)]
+	
 	// copy file to backup folder
 	baktarget := c.BakFolder
 	if !strings.HasSuffix(baktarget, "/") {
@@ -110,18 +119,18 @@ func (c *Context) processDocument(path string) {
 	targetWithExt := baktarget + filename + extension
 	
 	srcFile, err := os.Open(path)
-    check(err)
-    defer srcFile.Close()
+	check(err)
+	defer srcFile.Close()
 
-    destFile, err := os.Create(targetWithExt) // creates if file doesn't exist
-    check(err)
-    defer destFile.Close()
+	destFile, err := os.Create(targetWithExt) // creates if file doesn't exist
+	check(err)
+	defer destFile.Close()
 
-    _, err = io.Copy(destFile, srcFile) // check first var for number of bytes copied
-    check(err)
+	_, err = io.Copy(destFile, srcFile) // check first var for number of bytes copied
+	check(err)
 
-    err = destFile.Sync()
-    check(err)
+	err = destFile.Sync()
+	check(err)
 
 	// try to rename file
 	tmpFile, err := ioutil.TempFile(directory, filename+".*."+extension)
@@ -145,13 +154,23 @@ func (c *Context) processDocument(path string) {
 	targetWithoutExtension := target + filename
 	target = targetWithoutExtension + ".tmp"
 	log.Printf("Run command >%s %s %s %s<\n", c.OCRMyPDFBinary, c.Parameter, tmpFile.Name(), target)
-	runargs := strings.Split(c.Parameter, " ")
+	
+	rawArgs := strings.Split(c.Parameter, " ")
+	var runargs []string
+	for _, arg := range rawArgs {
+		trimmed := strings.TrimSpace(arg)
+		if trimmed != "" {
+			runargs = append(runargs, trimmed)
+		}
+	}
 	runargs = append(runargs, tmpFile.Name(), target)
+	
 	cmd := exec.Command(c.OCRMyPDFBinary, runargs...)
 
-	out, err := cmd.CombinedOutput()
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
 
-	log.Println(string(out))
+	err = cmd.Run()
 
 	log.Printf("Job finished with result %v\n", err)
 	if err != nil {
@@ -160,10 +179,9 @@ func (c *Context) processDocument(path string) {
 	} else {
 		// ok: rename tmp target to final target
 		for fileExists(targetWithoutExtension+".pdf") {
-			targetWithoutExtension+="_1"
+			targetWithoutExtension += "_1"
 		}
 		os.Rename(target, targetWithoutExtension+".pdf")
-
 	}
 }
 
@@ -178,16 +196,25 @@ func (c *Context) hasOneOfExtensions(path string) bool {
 }
 
 func fileExists(filename string) bool {
-    info, err := os.Stat(filename)
-    if os.IsNotExist(err) {
-        return false
-    }
-    return !info.IsDir()
+	info, err := os.Stat(filename)
+	if os.IsNotExist(err) {
+		return false
+	}
+	return !info.IsDir()
 }
 
 func check(err error) {
-    if err != nil {
-        fmt.Println("Error : %s", err.Error())
-        os.Exit(1)
-    }
+	if err != nil {
+		fmt.Printf("Error : %s\n", err.Error())
+		os.Exit(1)
+	}
+}
+
+func isFileReady(path string) bool {
+	file, err := os.OpenFile(path, os.O_RDWR, 0)
+	if err != nil {
+		return false
+	}
+	file.Close()
+	return true
 }
