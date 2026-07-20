@@ -60,7 +60,7 @@ func main() {
 		contextStruct.Extensions = "pdf,tif,tiff,jpg,jpeg,png,gif"
 	}
 
-	// FIX 1: Erzwinge ungepuffertes Logging direkt auf os.Stdout, um Hänger im Docker-Log-Buffer zu vermeiden
+	// Enforce unbuffered logging directly to os.Stdout to prevent log buffer hangs in Docker
 	log.SetFlags(log.Ldate | log.Ltime | log.Lmicroseconds | log.Lshortfile)
 	log.SetOutput(os.Stdout)
 
@@ -73,7 +73,7 @@ func main() {
 	log.Println("OCRMyPDF binary = " + contextStruct.OCRMyPDFBinary)
 	log.Println("OCRMyPDF parameter = " + contextStruct.Parameter)
 
-	// FIX 2: Versionscheck mit hartem 5-Sekunden-Timeout absichern, falls das Binary beim Init blockiert
+	// Check OCRmyPDF version with a 5-second timeout to prevent hangs if the binary blocks during init
 	log.Println("Checking OCRmyPDF version...")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -127,7 +127,7 @@ func (c *Context) watchdog() {
 func (c *Context) processDocument(path string) {
 	log.Println("Processing file " + path)
 
-	// Warte bis zu 10 Sekunden, falls die Datei noch vom Scanner/System geschrieben wird
+	// Wait up to 10 seconds to ensure the file is completely written by the scanner/system
 	for i := 0; i < 10; i++ {
 		if isFileReady(path) {
 			break
@@ -135,13 +135,13 @@ func (c *Context) processDocument(path string) {
 		time.Sleep(1 * time.Second)
 	}
 
-	// first get the parts of the path: dir+filename+ext
+	// First get the parts of the path: dir+filename+ext
 	directory := filepath.Dir(path)
 	filename := filepath.Base(path)
 	extension := filepath.Ext(filename)
 	filename = filename[0 : len(filename)-len(extension)]
 	
-	// copy file to backup folder
+	// Copy file to backup folder
 	baktarget := c.BakFolder
 	if !strings.HasSuffix(baktarget, "/") {
 		baktarget = baktarget + "/"
@@ -152,17 +152,17 @@ func (c *Context) processDocument(path string) {
 	check(err)
 	defer srcFile.Close()
 
-	destFile, err := os.Create(targetWithExt) // creates if file doesn't exist
+	destFile, err := os.Create(targetWithExt) // Creates if file doesn't exist
 	check(err)
 	defer destFile.Close()
 
-	_, err = io.Copy(destFile, srcFile) // check first var for number of bytes copied
+	_, err = io.Copy(destFile, srcFile) // Check first var for number of bytes copied
 	check(err)
 
 	err = destFile.Sync()
 	check(err)
 
-	// try to rename file
+	// Try to rename file to a temporary staging file
 	tmpFile, err := ioutil.TempFile(directory, filename+".*."+extension)
 	if err != nil {
 		log.Printf("Unable to create temp file: %v", err)
@@ -185,7 +185,7 @@ func (c *Context) processDocument(path string) {
 	target = targetWithoutExtension + ".tmp"
 	log.Printf("Run command >%s %s %s %s<\n", c.OCRMyPDFBinary, c.Parameter, tmpFile.Name(), target)
 	
-	// FIX 3: Verhindert leere Argumente durch doppelte Leerzeichen in den Parametern
+	// Filter out empty arguments caused by duplicate spaces in parameters (crucial for OCRmyPDF 17+)
 	rawArgs := strings.Split(c.Parameter, " ")
 	var runargs []string
 	for _, arg := range rawArgs {
@@ -198,7 +198,7 @@ func (c *Context) processDocument(path string) {
 	
 	cmd := exec.Command(c.OCRMyPDFBinary, runargs...)
 
-	// FIX 4: Streams direkt verbinden, um Fehlermeldungen von OCRmyPDF 17+ ungefiltert im Log zu sehen
+	// Connect streams directly to see OCRmyPDF 17+ errors unfiltered in the container log
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
@@ -206,10 +206,10 @@ func (c *Context) processDocument(path string) {
 
 	log.Printf("Job finished with result %v\n", err)
 	if err != nil {
-		// error: tmp back to original name
+		// Error occurred: move temp file back to original path
 		os.Rename(tmpFile.Name(), path)
 	} else {
-		// ok: rename tmp target to final target
+		// Success: rename tmp target to final target destination
 		for fileExists(targetWithoutExtension+".pdf") {
 			targetWithoutExtension += "_1"
 		}
@@ -242,7 +242,7 @@ func check(err error) {
 	}
 }
 
-// FIX 5: Nur lesend öffnen, damit es auch bei restriktiven Container-Usern (UID 1000) ohne Root klappt
+// Open file as read-only to ensure compatibility with non-root container users (UID 1000)
 func isFileReady(path string) bool {
 	file, err := os.OpenFile(path, os.O_RDONLY, 0)
 	if err != nil {
