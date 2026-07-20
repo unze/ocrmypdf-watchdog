@@ -10,6 +10,7 @@ services:
       WATCHDOG_EXTENSIONS: pdf,jpg,jpeg,tif,tiff,png,gif
       WATCHDOG_FREQUENCY: 60
     image: unze/ocrmypdf-watchdog:latest
+    user: "0:0"
     network_mode: none
     restart: always
     volumes:
