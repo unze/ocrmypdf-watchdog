@@ -58,6 +58,16 @@ func main() {
 	if context.Extensions == "" {
 		context.Extensions = "pdf,tif,tiff,jpg,jpeg,png,gif"
 	}
+
+	// Version von OCRmyPDF abfragen und ausgeben
+	versionCmd := exec.Command(context.OCRMyPDFBinary, "--version")
+	versionOut, versionErr := versionCmd.CombinedOutput()
+	if versionErr != nil {
+		log.Printf("Could not determine OCRmyPDF version: %v\n", versionErr)
+	} else {
+		log.Printf("OCRmyPDF Version: %s", strings.TrimSpace(string(versionOut)))
+	}
+
 	log.Println("Watchdog started with:")
 	log.Println("in = " + context.InFolder)
 	log.Println("bak = " + context.BakFolder)
@@ -73,8 +83,13 @@ func main() {
 func (c *Context) watchdog() {
 	frequency := time.Duration(c.Frequency) * time.Second
 	for {
+		log.Println("Scanning folder " + c.InFolder + " for files...")
 		var files []string
 		err := filepath.Walk(c.InFolder, func(path string, info os.FileInfo, err error) error {
+			if err != nil {
+				log.Printf("Error accessing path %s: %v\n", path, err)
+				return err
+			}
 			if !info.IsDir() {
 				if c.hasOneOfExtensions(path) {
 					files = append(files, path)
@@ -82,13 +97,17 @@ func (c *Context) watchdog() {
 			}
 			return nil
 		})
+		
 		if err != nil {
-			panic(err)
-		}
-		for _, file := range files {
-			c.processDocument(file)
+			log.Printf("Walk failed: %v. Retrying in next cycle.\n", err)
+		} else {
+			log.Printf("Found %d matching files to process.\n", len(files))
+			for _, file := range files {
+				c.processDocument(file)
+			}
 		}
 
+		log.Printf("Sleeping for %v...\n", frequency)
 		timer := time.NewTimer(frequency)
 		<-timer.C
 		timer.Stop()
@@ -98,6 +117,7 @@ func (c *Context) watchdog() {
 func (c *Context) processDocument(path string) {
 	log.Println("Processing file " + path)
 
+	// Warte bis zu 10 Sekunden, falls die Datei noch geschrieben wird
 	for i := 0; i < 10; i++ {
 		if isFileReady(path) {
 			break
@@ -155,6 +175,7 @@ func (c *Context) processDocument(path string) {
 	target = targetWithoutExtension + ".tmp"
 	log.Printf("Run command >%s %s %s %s<\n", c.OCRMyPDFBinary, c.Parameter, tmpFile.Name(), target)
 	
+	// FIX: Verhindert leere Argumente durch doppelte Leerzeichen
 	rawArgs := strings.Split(c.Parameter, " ")
 	var runargs []string
 	for _, arg := range rawArgs {
@@ -167,6 +188,7 @@ func (c *Context) processDocument(path string) {
 	
 	cmd := exec.Command(c.OCRMyPDFBinary, runargs...)
 
+	// FIX: Streams direkt verbinden, um OCRmyPDF Fehlermeldungen im Log zu sehen
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
@@ -210,8 +232,9 @@ func check(err error) {
 	}
 }
 
+// FIX: Öffnet die Datei nur lesend, was auch ohne root-Schreibrechte im Container klappt
 func isFileReady(path string) bool {
-	file, err := os.OpenFile(path, os.O_RDWR, 0)
+	file, err := os.OpenFile(path, os.O_RDONLY, 0)
 	if err != nil {
 		return false
 	}
