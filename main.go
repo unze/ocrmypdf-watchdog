@@ -59,11 +59,14 @@ func main() {
 		context.Extensions = "pdf,tif,tiff,jpg,jpeg,png,gif"
 	}
 
-	// Version von OCRmyPDF abfragen und ausgeben
-	versionCmd := exec.Command(context.OCRMyPDFBinary, "--version")
+	// Version von OCRmyPDF mit einem 5-Sekunden-Timeout abfragen
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	versionCmd := exec.CommandContext(ctx, context.OCRMyPDFBinary, "--version")
 	versionOut, versionErr := versionCmd.CombinedOutput()
 	if versionErr != nil {
-		log.Printf("Could not determine OCRmyPDF version: %v\n", versionErr)
+		log.Printf("Could not determine OCRmyPDF version (maybe timeout?): %v\n", versionErr)
 	} else {
 		log.Printf("OCRmyPDF Version: %s", strings.TrimSpace(string(versionOut)))
 	}
