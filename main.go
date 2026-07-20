@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"io"
@@ -29,7 +30,7 @@ func main() {
 	if err != nil {
 		frequency = 1
 	}
-	context := &Context{
+	contextStruct := &Context{
 		os.Getenv("OCRMYPDF_IN"),
 		os.Getenv("OCRMYPDF_BAK"),
 		os.Getenv("OCRMYPDF_OUT"),
@@ -38,49 +39,55 @@ func main() {
 		frequency,
 		os.Getenv("WATCHDOG_EXTENSIONS"),
 	}
-	flag.StringVar(&context.InFolder, "in", context.InFolder, "input folder")
-	flag.StringVar(&context.BakFolder, "bak", context.BakFolder, "backup folder")
-	flag.StringVar(&context.OutFolder, "out", context.OutFolder, "output folder")
-	flag.StringVar(&context.OCRMyPDFBinary, "ocrmypdf", context.OCRMyPDFBinary, "ocrmydpf binary to use")
-	flag.IntVar(&context.Frequency, "frequency", frequency, "frequency in seconds")
+	flag.StringVar(&contextStruct.InFolder, "in", contextStruct.InFolder, "input folder")
+	flag.StringVar(&contextStruct.BakFolder, "bak", contextStruct.BakFolder, "backup folder")
+	flag.StringVar(&contextStruct.OutFolder, "out", contextStruct.OutFolder, "output folder")
+	flag.StringVar(&contextStruct.OCRMyPDFBinary, "ocrmypdf", contextStruct.OCRMyPDFBinary, "ocrmydpf binary to use")
+	flag.IntVar(&contextStruct.Frequency, "frequency", frequency, "frequency in seconds")
 
 	flag.Parse()
 
-	if context.InFolder == "" || context.OutFolder == "" {
+	if contextStruct.InFolder == "" || contextStruct.OutFolder == "" {
 		log.Fatalln("in and/or out folder not defined.")
 	}
-	if context.OCRMyPDFBinary == "" {
-		context.OCRMyPDFBinary = "ocrmypdf"
+	if contextStruct.OCRMyPDFBinary == "" {
+		contextStruct.OCRMyPDFBinary = "ocrmypdf"
 	}
-	if context.Parameter == "" {
-		context.Parameter = "-l eng+fra+deu --rotate-pages --deskew --jobs 4 --output-type pdfa"
+	if contextStruct.Parameter == "" {
+		contextStruct.Parameter = "-l eng+fra+deu --rotate-pages --deskew --jobs 4 --output-type pdfa"
 	}
-	if context.Extensions == "" {
-		context.Extensions = "pdf,tif,tiff,jpg,jpeg,png,gif"
+	if contextStruct.Extensions == "" {
+		contextStruct.Extensions = "pdf,tif,tiff,jpg,jpeg,png,gif"
 	}
 
-	// Version von OCRmyPDF mit einem 5-Sekunden-Timeout abfragen
+	// FIX 1: Erzwinge ungepuffertes Logging direkt auf os.Stdout, um Hänger im Docker-Log-Buffer zu vermeiden
+	log.SetFlags(log.Ldate | log.Ltime | log.Lmicroseconds | log.Lshortfile)
+	log.SetOutput(os.Stdout)
+
+	log.Println("Watchdog configurations initialized.")
+	log.Println("in = " + contextStruct.InFolder)
+	log.Println("bak = " + contextStruct.BakFolder)
+	log.Println("out = " + contextStruct.OutFolder)
+	log.Printf("Frequency = %d seconds\n", contextStruct.Frequency)
+	log.Println("Extensions to look for: " + contextStruct.Extensions)
+	log.Println("OCRMyPDF binary = " + contextStruct.OCRMyPDFBinary)
+	log.Println("OCRMyPDF parameter = " + contextStruct.Parameter)
+
+	// FIX 2: Versionscheck mit hartem 5-Sekunden-Timeout absichern, falls das Binary beim Init blockiert
+	log.Println("Checking OCRmyPDF version...")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	versionCmd := exec.CommandContext(ctx, context.OCRMyPDFBinary, "--version")
+	versionCmd := exec.CommandContext(ctx, contextStruct.OCRMyPDFBinary, "--version")
 	versionOut, versionErr := versionCmd.CombinedOutput()
 	if versionErr != nil {
 		log.Printf("Could not determine OCRmyPDF version (maybe timeout?): %v\n", versionErr)
 	} else {
-		log.Printf("OCRmyPDF Version: %s", strings.TrimSpace(string(versionOut)))
+		log.Printf("OCRmyPDF Version: %s\n", strings.TrimSpace(string(versionOut)))
 	}
 
-	log.Println("Watchdog started with:")
-	log.Println("in = " + context.InFolder)
-	log.Println("bak = " + context.BakFolder)
-	log.Println("out = " + context.OutFolder)
-	log.Printf("Frequency = %d seconds\n", context.Frequency)
-	log.Println("Extensions to look for: " + context.Extensions)
-	log.Println("OCRMyPDF binary = " + context.OCRMyPDFBinary)
-	log.Println("OCRMyPDF parameter = " + context.Parameter)
-
-	context.watchdog()
+	log.Println("Starting watchdog loop now...")
+	contextStruct.watchdog()
 }
 
 func (c *Context) watchdog() {
@@ -120,7 +127,7 @@ func (c *Context) watchdog() {
 func (c *Context) processDocument(path string) {
 	log.Println("Processing file " + path)
 
-	// Warte bis zu 10 Sekunden, falls die Datei noch geschrieben wird
+	// Warte bis zu 10 Sekunden, falls die Datei noch vom Scanner/System geschrieben wird
 	for i := 0; i < 10; i++ {
 		if isFileReady(path) {
 			break
@@ -178,7 +185,7 @@ func (c *Context) processDocument(path string) {
 	target = targetWithoutExtension + ".tmp"
 	log.Printf("Run command >%s %s %s %s<\n", c.OCRMyPDFBinary, c.Parameter, tmpFile.Name(), target)
 	
-	// FIX: Verhindert leere Argumente durch doppelte Leerzeichen
+	// FIX 3: Verhindert leere Argumente durch doppelte Leerzeichen in den Parametern
 	rawArgs := strings.Split(c.Parameter, " ")
 	var runargs []string
 	for _, arg := range rawArgs {
@@ -191,7 +198,7 @@ func (c *Context) processDocument(path string) {
 	
 	cmd := exec.Command(c.OCRMyPDFBinary, runargs...)
 
-	// FIX: Streams direkt verbinden, um OCRmyPDF Fehlermeldungen im Log zu sehen
+	// FIX 4: Streams direkt verbinden, um Fehlermeldungen von OCRmyPDF 17+ ungefiltert im Log zu sehen
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
@@ -235,7 +242,7 @@ func check(err error) {
 	}
 }
 
-// FIX: Öffnet die Datei nur lesend, was auch ohne root-Schreibrechte im Container klappt
+// FIX 5: Nur lesend öffnen, damit es auch bei restriktiven Container-Usern (UID 1000) ohne Root klappt
 func isFileReady(path string) bool {
 	file, err := os.OpenFile(path, os.O_RDONLY, 0)
 	if err != nil {
